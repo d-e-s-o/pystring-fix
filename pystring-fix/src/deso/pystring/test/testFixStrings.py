@@ -49,6 +49,11 @@ class TestFixStrings(TestCase):
       b\"\"\"foo\"\"\"
       r"foo"
       r\"\"\"foo\"\"\"
+      '''Foo 'bar' foobar.'''
+      \"\"\"Foo 'bar' foobar.\"\"\"
+      # That's a "test"
+      # 'That's a "test"'
+      # 'That's a 'test' in a comment'
     """).encode("utf-8")
 
     expected = dedent("""\
@@ -62,6 +67,11 @@ class TestFixStrings(TestCase):
       b\"\"\"foo\"\"\"
       r"foo"
       r\"\"\"foo\"\"\"
+      \"\"\"Foo 'bar' foobar.\"\"\"
+      \"\"\"Foo 'bar' foobar.\"\"\"
+      # That's a "test"
+      # 'That's a "test"'
+      # 'That's a 'test' in a comment'
     """).encode("utf-8")
 
     with NamedTemporaryFile("w+b", buffering=0) as f:

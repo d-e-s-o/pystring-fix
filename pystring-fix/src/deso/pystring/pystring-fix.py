@@ -33,15 +33,31 @@ from argparse import (
 from os.path import (
   abspath,
 )
+from re import (
+  compile as regex,
+)
 from sys import (
   argv as sysargv,
 )
 from token import (
-  STRING,
+  STRING as TOKEN_STRING,
 )
 from tokenize import (
   tokenize,
 )
+
+
+# Python has (at least?) two string syntaxes: one with three
+# quotation marks (be they single or double) and another with a
+# single one (again, a single or double quote sign).
+SINGLE_QUOTE = "'"
+DOUBLE_QUOTE = "\""
+NO_QUOTE = r"[^{sq}{dq}]".format(sq=SINGLE_QUOTE, dq=DOUBLE_QUOTE)
+# Create a regular expression that can be used to match a string token.
+# TODO: Check the possible prefixes and the maximum number.
+STRING = r"({n}?)(?P<quote>{sq}{{3}}|{dq}{{3}}|{sq}|{dq})(.*)(?P=quote)"
+STRING = STRING.format(n=NO_QUOTE, sq=SINGLE_QUOTE, dq=DOUBLE_QUOTE)
+STRING_RE = regex(STRING)
 
 
 def fixStrings(file_):
@@ -52,40 +68,23 @@ def fixStrings(file_):
     lines.append(line)
     return line
 
-  def checkAndReplace(string, old, new):
-    """Check if a replacement in the last line is required and, if so, do it."""
-    index = string.find(old)
-    rindex = string.rfind(old)
+  def replaceQuotes(string):
+    """Replace single quotes with double quotes in a string."""
+    def replace(match):
+      """Perform the actual replacement."""
+      prefix, quotes, quoted = match.groups()
+      quotes = quotes.replace(SINGLE_QUOTE, DOUBLE_QUOTE)
+      return prefix + quotes + quoted + quotes
 
-    if index >= 0 and rindex >= 0 and index != rindex:
-      # Unfortunately the tokenizer supplies us with a true string
-      # although in all other places we work bytes like objects. So
-      # in case we need to make a replacement we need to convert the
-      # string first.
-      bytes_ = string.encode("utf-8")
-      new = new.encode("utf-8")
-
-      # We need to consider that a prefix might be placed in front of
-      # the string. That is what the first part is for.
-      replacement = bytes_[0:index] +\
-                    new +\
-                    bytes_[index+len(old):rindex] +\
-                    new
-      lines[-1] = lines[-1].replace(bytes_, replacement, 1)
-      return True
-
-    return False
+    return STRING_RE.sub(replace, string)
 
   lines = []
   iterator = tokenize(readline)
 
   for type_, string, _, _, _ in iterator:
-    if type_ == STRING:
-      # Python has (at least?) two string syntaxes: one with three
-      # quotation marks (be they single or double) and another with a
-      # single one (again, a single or double quote sign).
-      if not checkAndReplace(string, "'''", "\"\"\""):
-        checkAndReplace(string, "'", "\"")
+    if type_ == TOKEN_STRING:
+      replaced = replaceQuotes(string).encode("utf-8")
+      lines[-1] = lines[-1].replace(string.encode("utf-8"), replaced, 1)
 
   return lines
 
