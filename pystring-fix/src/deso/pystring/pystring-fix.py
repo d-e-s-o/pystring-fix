@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 #/***************************************************************************
-# *   Copyright (C) 2015 deso (deso@posteo.net)                             *
+# *   Copyright (C) 2015-2016 deso (deso@posteo.net)                        *
 # *                                                                         *
 # *   This program is free software: you can redistribute it and/or modify  *
 # *   it under the terms of the GNU General Public License as published by  *
@@ -35,6 +35,7 @@ from os.path import (
 )
 from re import (
   compile as regex,
+  DOTALL,
 )
 from sys import (
   argv as sysargv,
@@ -57,15 +58,15 @@ NO_QUOTE = r"[^{sq}{dq}]".format(sq=SINGLE_QUOTE, dq=DOUBLE_QUOTE)
 # TODO: Check the possible prefixes and the maximum number.
 STRING = r"({n}?)(?P<quote>{sq}{{3}}|{dq}{{3}}|{sq}|{dq})(.*)(?P=quote)"
 STRING = STRING.format(n=NO_QUOTE, sq=SINGLE_QUOTE, dq=DOUBLE_QUOTE)
-STRING_RE = regex(STRING)
+STRING_RE = regex(STRING, DOTALL)
 
 
 def fixStrings(file_):
-  """Replace all "wrong" strings in a file and return a fixed up list of lines."""
+  """Replace all "wrong" strings in a file and return the fixed up content."""
   def readline(*args, **kwargs):
-    """Wrapper around the file_'s readline that stores the lines we read."""
+    """Wrapper around the file_'s readline that stores the content we read so far."""
     line = file_.readline(*args, **kwargs)
-    lines.append(line)
+    content[0] += line
     return line
 
   def replaceQuotes(string):
@@ -78,15 +79,25 @@ def fixStrings(file_):
 
     return STRING_RE.sub(replace, string)
 
-  lines = []
+  def rreplace(string, to_replace, replacement):
+    """Replace the last occurrence of 'to_replace' with 'replacement'."""
+    begin = string.rindex(to_replace)
+    end = begin + len(to_replace)
+
+    return string[:begin] + replacement + string[end:]
+
+  # We need a mutable object here so that it can be captured in the
+  # 'readline' function. That's why we use a list containing a single
+  # bytes object.
+  content = [b""]
   iterator = tokenize(readline)
 
   for type_, string, _, _, _ in iterator:
     if type_ == TOKEN_STRING:
       replaced = replaceQuotes(string).encode("utf-8")
-      lines[-1] = lines[-1].replace(string.encode("utf-8"), replaced, 1)
+      content[0] = rreplace(content[0], string.encode("utf-8"), replaced)
 
-  return lines
+  return content[0]
 
 
 def main(argv):
@@ -108,7 +119,7 @@ def main(argv):
       content = fixStrings(src)
 
     with open(file_, "wb+") as dst:
-      dst.writelines(content)
+      dst.write(content)
 
 
 if __name__ == "__main__":

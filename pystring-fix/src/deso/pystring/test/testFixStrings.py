@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 #/***************************************************************************
-# *   Copyright (C) 2015 deso (deso@posteo.net)                             *
+# *   Copyright (C) 2015-2016 deso (deso@posteo.net)                        *
 # *                                                                         *
 # *   This program is free software: you can redistribute it and/or modify  *
 # *   it under the terms of the GNU General Public License as published by  *
@@ -36,8 +36,24 @@ from unittest import (
 
 class TestFixStrings(TestCase):
   """Tests for the Python string unification functionality."""
-  def testStringUnification(self):
-    """Verify that Python strings are unified properly."""
+  def doTest(self, content, expected):
+    """Fix the strings in a Python file and verify the expected outcome."""
+    with NamedTemporaryFile("w+b", buffering=0) as f:
+      f.write(content)
+      f.seek(0)
+
+      new_content = fixStrings(f)
+      f.truncate()
+      f.seek(0)
+
+      f.write(new_content)
+      f.seek(0)
+
+      self.assertEqual(f.read(), expected)
+
+
+  def testSingleLineUnification(self):
+    """Verify that single line Python strings are unified properly."""
     content = dedent("""\
       'foo'
       "foo"
@@ -74,18 +90,32 @@ class TestFixStrings(TestCase):
       # 'That's a 'test' in a comment'
     """).encode("utf-8")
 
-    with NamedTemporaryFile("w+b", buffering=0) as f:
-      f.write(content)
-      f.seek(0)
+    self.doTest(content, expected)
 
-      content = fixStrings(f)
-      f.truncate()
-      f.seek(0)
 
-      f.writelines(content)
-      f.seek(0)
+  def testMultiLineUnification(self):
+    """Verify that multi-line Python strings are unified properly."""
+    content = dedent("""\
+      script = bytes(dedent('''
+        pid = fork()
+        if pid == 0:
+          print('CHILD')
+        else:
+          print('PARENT')
+      '''), 'utf-8')
+    """).encode("utf-8")
 
-      self.assertEqual(f.read(), expected)
+    expected = dedent("""\
+      script = bytes(dedent(\"\"\"
+        pid = fork()
+        if pid == 0:
+          print('CHILD')
+        else:
+          print('PARENT')
+      \"\"\"), "utf-8")
+    """).encode("utf-8")
+
+    self.doTest(content, expected)
 
 
 if __name__ == "__main__":
