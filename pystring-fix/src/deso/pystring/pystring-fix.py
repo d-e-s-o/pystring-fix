@@ -39,6 +39,7 @@ from re import (
 )
 from sys import (
   argv as sysargv,
+  stderr,
 )
 from token import (
   STRING as TOKEN_STRING,
@@ -107,6 +108,11 @@ def main(argv):
     "files", action="store", default=[], nargs="+",
     help="A list of files to work on.",
   )
+  parser.add_argument(
+    "-c", "--check", action="store_true", default=False,
+    help="Only check the given files for inconsistent quotation usage, "
+         "do not correct them.",
+  )
 
   ns = parser.parse_args(argv[1:])
 
@@ -118,9 +124,19 @@ def main(argv):
     with open(file_, "rb") as src:
       content = fixStrings(src)
 
-    with open(file_, "wb+") as dst:
-      dst.write(content)
+      if ns.check:
+        src.seek(0)
+        if content != src.read():
+          print("Inconsistent quotation usage detected in %s." % file_,
+                file=stderr)
+          return 1
+
+    if not ns.check:
+      with open(file_, "wb+") as dst:
+        dst.write(content)
+
+  return 0
 
 
 if __name__ == "__main__":
-  main(sysargv)
+  exit(main(sysargv))

@@ -22,6 +22,22 @@
 from deso.pystring import (
   fixStrings,
 )
+from os import (
+  pardir,
+)
+from os.path import (
+  dirname,
+  join,
+  realpath,
+)
+from subprocess import (
+  check_call,
+  CalledProcessError,
+  DEVNULL,
+)
+from sys import (
+  executable,
+)
 from tempfile import (
   NamedTemporaryFile,
 )
@@ -116,6 +132,49 @@ class TestFixStrings(TestCase):
     """).encode("utf-8")
 
     self.doTest(content, expected)
+
+
+class TestFixStringsScript(TestCase):
+  """Tests for the string unification script."""
+  FIX_STRINGS = realpath(join(dirname(__file__), pardir, "pystring-fix.py"))
+
+  @staticmethod
+  def invoke(*args):
+    """Invoke pystring-fix with the given arguments."""
+    check_call([executable, TestFixStringsScript.FIX_STRINGS] + list(args),
+               stderr=DEVNULL)
+
+
+  def testFixup(self):
+    """Verify that files are fixed up correctly."""
+    def doTest(content, expected):
+      """Write the given content into the file, run the script on it, and check the outcome."""
+      with NamedTemporaryFile("w+b", buffering=0) as f:
+        f.write(content)
+        f.seek(0)
+        self.invoke(f.name)
+
+        self.assertEqual(f.read(), expected)
+
+    content = b"'foo'"
+    expected = b"\"foo\""
+
+    doTest(content, expected)
+
+
+  def testCheck(self):
+    """Verify that wrong strings are flagged properly."""
+    def doTest(content):
+      """Write the given content into the file, run the script on it, and check the outcome."""
+      with NamedTemporaryFile("w+b", buffering=0) as f:
+        f.write(content)
+        self.invoke(f.name, "--check")
+
+    with self.assertRaises(CalledProcessError):
+      doTest(b"'foo'")
+
+    # If the quotation is correct the invocation must succeed.
+    doTest(b"foo\nbar")
 
 
 if __name__ == "__main__":
