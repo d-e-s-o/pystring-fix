@@ -54,12 +54,89 @@ from tokenize import (
 # single one (again, a single or double quote sign).
 SINGLE_QUOTE = "'"
 DOUBLE_QUOTE = "\""
+SINGLE_QUOTE_B = SINGLE_QUOTE.encode("utf-8")
+DOUBLE_QUOTE_B = DOUBLE_QUOTE.encode("utf-8")
 NO_QUOTE = r"[^{sq}{dq}]".format(sq=SINGLE_QUOTE, dq=DOUBLE_QUOTE)
 # Create a regular expression that can be used to match a string token.
 # TODO: Check the possible prefixes and the maximum number.
 STRING = r"({n}?)(?P<quote>{sq}{{3}}|{dq}{{3}}|{sq}|{dq})(.*)(?P=quote)"
 STRING = STRING.format(n=NO_QUOTE, sq=SINGLE_QUOTE, dq=DOUBLE_QUOTE)
-STRING_RE = regex(STRING, DOTALL)
+STRING_RE = regex(STRING.encode("utf-8"), DOTALL)
+
+
+class QuotationUnifier:
+  """A class for replacing single quotes with double quotes."""
+  def __init__(self):
+    """Create and initialize a quotation mark unification object."""
+    # A buffer of all the data we got fed so far.
+    self._buffer = b""
+    # Array of indexes at which the respective lines end.
+    self._indexes = []
+
+
+  def feed(self, line):
+    """Feed a new line to the unifier."""
+    self._buffer += line
+    index = len(line)
+
+    # To avoid unnecessary computation for every replacement/lookup we
+    # make we cache the accumulated lenghts of all lines (which equal
+    # the indexes at which they end).
+    if len(self._indexes) > 0:
+      index += self._indexes[-1]
+
+    self._indexes += [index]
+
+
+  def unify(self, string, start, end):
+    """Unify a given string in the internal buffer."""
+    def replaceQuotes(s):
+      """Replace single quotes with double quotes in a string."""
+      def replace(match):
+        """Perform the actual replacement."""
+        prefix, quotes, quoted = match.groups()
+        quotes = quotes.replace(SINGLE_QUOTE_B, DOUBLE_QUOTE_B)
+        return prefix + quotes + quoted + quotes
+
+      replaced, count = STRING_RE.subn(replace, s)
+      assert count in [0, 1], (s, replaced, count)
+      return replaced
+
+    def index(pair):
+      """Retrieve the index in the internal buffer for a particular (row,col) tuple."""
+      # A pair comprises the row and the column of a string.
+      row, col = pair
+      # The first actual row of interest is the one numbered one. So
+      # normalize to zero here.
+      index = row - 1
+
+      # The element at the first index in the array contains the length
+      # of the first line. So we need to subtract one more from the
+      # index and then use that in order to retrieve the correct
+      # position.
+      if index < 1:
+        return col
+      else:
+        return self._indexes[index - 1] + col
+
+    index_start = index(start)
+    index_end = index(end)
+
+    to_replace = self._buffer[index_start:index_end]
+    assert string == to_replace, (string, to_replace, self._buffer)
+
+    replaced = replaceQuotes(to_replace)
+    assert len(to_replace) == len(replaced), (to_replace, replaced)
+
+    self._buffer = self._buffer[:index_start] +\
+                   replaced +\
+                   self._buffer[index_end:]
+
+
+  @property
+  def data(self):
+    """Retrieve the "unified" buffer."""
+    return self._buffer
 
 
 def fixStrings(file_):
@@ -67,38 +144,17 @@ def fixStrings(file_):
   def readline(*args, **kwargs):
     """Wrapper around the file_'s readline that stores the content we read so far."""
     line = file_.readline(*args, **kwargs)
-    content[0] += line
+    unifier.feed(line)
     return line
 
-  def replaceQuotes(string):
-    """Replace single quotes with double quotes in a string."""
-    def replace(match):
-      """Perform the actual replacement."""
-      prefix, quotes, quoted = match.groups()
-      quotes = quotes.replace(SINGLE_QUOTE, DOUBLE_QUOTE)
-      return prefix + quotes + quoted + quotes
-
-    return STRING_RE.sub(replace, string)
-
-  def rreplace(string, to_replace, replacement):
-    """Replace the last occurrence of 'to_replace' with 'replacement'."""
-    begin = string.rindex(to_replace)
-    end = begin + len(to_replace)
-
-    return string[:begin] + replacement + string[end:]
-
-  # We need a mutable object here so that it can be captured in the
-  # 'readline' function. That's why we use a list containing a single
-  # bytes object.
-  content = [b""]
+  unifier = QuotationUnifier()
   iterator = tokenize(readline)
 
-  for type_, string, _, _, _ in iterator:
+  for type_, string, start, end, _ in iterator:
     if type_ == TOKEN_STRING:
-      replaced = replaceQuotes(string).encode("utf-8")
-      content[0] = rreplace(content[0], string.encode("utf-8"), replaced)
+      unifier.unify(string.encode("utf-8"), start, end)
 
-  return content[0]
+  return unifier.data
 
 
 def main(argv):

@@ -134,6 +134,21 @@ class TestFixStrings(TestCase):
     self.doTest(content, expected)
 
 
+  def testMultipleEqualString(self):
+    """Verify that with multiple strings the correct ones are replaced."""
+    content = dedent("""\
+      \"\"\"Fixup 'root'.\"\"\"
+      make(m, 'root', data=b'root')
+    """).encode("utf-8")
+
+    expected = dedent("""\
+      \"\"\"Fixup 'root'.\"\"\"
+      make(m, "root", data=b"root")
+    """).encode("utf-8")
+
+    self.doTest(content, expected)
+
+
 class TestFixStringsScript(TestCase):
   """Tests for the string unification script."""
   FIX_STRINGS = realpath(join(dirname(__file__), pardir, "pystring-fix.py"))
