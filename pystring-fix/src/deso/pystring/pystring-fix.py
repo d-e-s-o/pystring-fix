@@ -54,14 +54,12 @@ from tokenize import (
 # single one (again, a single or double quote sign).
 SINGLE_QUOTE = "'"
 DOUBLE_QUOTE = "\""
-SINGLE_QUOTE_B = SINGLE_QUOTE.encode("utf-8")
-DOUBLE_QUOTE_B = DOUBLE_QUOTE.encode("utf-8")
 NO_QUOTE = r"[^{sq}{dq}]".format(sq=SINGLE_QUOTE, dq=DOUBLE_QUOTE)
 # Create a regular expression that can be used to match a string token.
 # TODO: Check the possible prefixes and the maximum number.
 STRING = r"({n}?)(?P<quote>{sq}{{3}}|{dq}{{3}}|{sq}|{dq})(.*)(?P=quote)"
 STRING = STRING.format(n=NO_QUOTE, sq=SINGLE_QUOTE, dq=DOUBLE_QUOTE)
-STRING_RE = regex(STRING.encode("utf-8"), DOTALL)
+STRING_RE = regex(STRING, DOTALL)
 
 
 class QuotationUnifier:
@@ -69,15 +67,16 @@ class QuotationUnifier:
   def __init__(self):
     """Create and initialize a quotation mark unification object."""
     # A buffer of all the data we got fed so far.
-    self._buffer = b""
+    self._buffer = ""
     # Array of indexes at which the respective lines end.
     self._indexes = []
 
 
   def feed(self, line):
     """Feed a new line to the unifier."""
-    self._buffer += line
-    index = len(line)
+    string = line.decode("utf-8")
+    self._buffer += string
+    index = len(string)
 
     # To avoid unnecessary computation for every replacement/lookup we
     # make we cache the accumulated lenghts of all lines (which equal
@@ -95,7 +94,7 @@ class QuotationUnifier:
       def replace(match):
         """Perform the actual replacement."""
         prefix, quotes, quoted = match.groups()
-        quotes = quotes.replace(SINGLE_QUOTE_B, DOUBLE_QUOTE_B)
+        quotes = quotes.replace(SINGLE_QUOTE, DOUBLE_QUOTE)
         return prefix + quotes + quoted + quotes
 
       replaced, count = STRING_RE.subn(replace, s)
@@ -152,7 +151,7 @@ def fixStrings(file_):
 
   for type_, string, start, end, _ in iterator:
     if type_ == TOKEN_STRING:
-      unifier.unify(string.encode("utf-8"), start, end)
+      unifier.unify(string, start, end)
 
   return unifier.data
 
@@ -182,13 +181,13 @@ def main(argv):
 
       if ns.check:
         src.seek(0)
-        if content != src.read():
+        if content != src.read().decode("utf-8"):
           print("Inconsistent quotation usage detected in %s." % file_,
                 file=stderr)
           return 1
 
     if not ns.check:
-      with open(file_, "wb+") as dst:
+      with open(file_, "w+") as dst:
         dst.write(content)
 
   return 0

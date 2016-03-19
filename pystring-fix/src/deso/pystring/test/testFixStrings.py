@@ -58,7 +58,7 @@ class TestFixStrings(TestCase):
       f.write(content)
       f.seek(0)
 
-      new_content = fixStrings(f)
+      new_content = fixStrings(f).encode("utf-8")
       f.truncate()
       f.seek(0)
 
@@ -144,6 +144,32 @@ class TestFixStrings(TestCase):
     expected = dedent("""\
       \"\"\"Fixup 'root'.\"\"\"
       make(m, "root", data=b"root")
+    """).encode("utf-8")
+
+    self.doTest(content, expected)
+
+
+  def testUnicodeContent(self):
+    content = dedent("""\
+      "├"
+    """).encode("utf-8")
+
+    self.doTest(content, content)
+
+
+  def testUnicodeContentNotUnified(self):
+    content = dedent("""\
+      if index < length - 1:
+        indentation += '├── '
+      else:
+        indentation += '└── '
+    """).encode("utf-8")
+
+    expected = dedent("""\
+      if index < length - 1:
+        indentation += "├── "
+      else:
+        indentation += "└── "
     """).encode("utf-8")
 
     self.doTest(content, expected)
